@@ -2,8 +2,8 @@ package net.catenax.selfdescriptionfactory;
 
 import com.danubetech.verifiablecredentials.VerifiableCredential;
 import foundation.identity.jsonld.JsonLDObject;
+import io.zonky.test.db.AutoConfigureEmbeddedDatabase;
 import net.catenax.selfdescriptionfactory.service.SDFactory;
-import org.bson.types.ObjectId;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -14,9 +14,14 @@ import org.springframework.test.context.junit4.SpringRunner;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 
 @SpringBootTest
 @RunWith(SpringRunner.class)
+@AutoConfigureEmbeddedDatabase(
+        type = AutoConfigureEmbeddedDatabase.DatabaseType.POSTGRES,
+        provider = AutoConfigureEmbeddedDatabase.DatabaseProvider.ZONKY
+)
 public class VCTest {
 
     @Autowired
@@ -38,13 +43,13 @@ public class VCTest {
     }
 
     private VerifiableCredential createVc() {
-        var objectID = ObjectId.get();
+        var objectID = UUID.randomUUID().toString();
         Map<String, Object> claims = new LinkedHashMap<>();
         claims.put("company_number", "DE-123");
         claims.put("headquarter_country", "DE");
         claims.put("legal_country", "DE");
         claims.put("bpn", "12345678");
-        return sdFactory.createVC(objectID.toHexString(), claims, holder, issuer);
+        return sdFactory.createVC(objectID, claims, holder, issuer);
     }
 
     @Test

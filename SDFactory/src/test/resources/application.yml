@@ -1,11 +1,14 @@
 spring:
-  mongodb:
-    embedded:
-      version: 5.0.2
-  data:
-    mongodb:
-      host: localhost
-      port: 0
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: create
+  datasource:
+    url: jdbc:postgresql://localhost:5432/postgres
+    username: postgres
+    password: postgres
+  liquibase:
+    change-log: classpath:/db/changelog/db.changelog-master.xml
 keycloak:
   auth-server-url: https://catenaxdev003akssrv.germanywestcentral.cloudapp.azure.com/iamcentralidp/auth
   realm: CX-Central
@@ -32,6 +35,3 @@ app:
   security:
     createRole: add_self_descriptions
     deleteRole: remove_self_description
-  db:
-    sd:
-      collectionName: selfdescription4

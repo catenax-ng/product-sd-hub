@@ -6,15 +6,13 @@ import com.danubetech.verifiablecredentials.VerifiableCredential;
 import com.danubetech.verifiablecredentials.jsonld.VerifiableCredentialContexts;
 import foundation.identity.jsonld.JsonLDUtils;
 import lombok.RequiredArgsConstructor;
+import net.catenax.selfdescriptionfactory.dto.SDDocumentDto;
+import net.catenax.selfdescriptionfactory.repo.VCModel;
+import net.catenax.selfdescriptionfactory.repo.VerifiableCredentialRepo;
 import net.catenax.selfdescriptionfactory.service.wallet.CustodianWallet;
-import org.bson.Document;
-import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.config.ConfigurableBeanFactory;
 import org.springframework.context.annotation.Scope;
-import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.mongodb.core.query.Criteria;
-import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -25,6 +23,8 @@ import java.time.Instant;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * A service to create and manipulate of Self-Description document
@@ -39,6 +39,8 @@ public class SDFactory {
     // Namespace for the Traceability context, used for the test in conjunction with https://catalog.demo.supplytree.org project
     static final URI TRACEABILITY_VOC_URI = URI.create("https://w3id.org/traceability/v1");
 
+    public static final Pattern UUID_REGEX = Pattern.compile("\\p{XDigit}{8}-\\p{XDigit}{4}-\\p{XDigit}{4}-\\p{XDigit}{4}-\\p{XDigit}{12}");
+
     static {
         try (InputStream sdVocIs = SDFactory.class.getClassLoader().getResourceAsStream("verifiablecredentials.jsonld/sd-document-v0.1.jsonld");
              InputStream trVocIs = SDFactory.class.getClassLoader().getResourceAsStream("verifiablecredentials.jsonld/traceability-v1.jsonld")) {
@@ -51,25 +53,32 @@ public class SDFactory {
         }
     }
 
-    @Value("${app.db.sd.collectionName}")
-    private String sdCollectionName;
     @Value("${app.verifiableCredentials.durationDays:90}")
     private int duration;
     @Value("${app.verifiableCredentials.idPrefix}")
     private String idPrefix;
 
-    private final MongoTemplate mongoTemplate;
+    private final VerifiableCredentialRepo vcRepo;
     private final CustodianWallet custodianWallet;
 
     /**
      * Stores VerifiableCredential in Mongo DB without checks
      *
      * @param verifiableCredential credential to be saved
+     * @param sdDocumentDto
      */
-    public void storeVC(VerifiableCredential verifiableCredential, ObjectId objectId) {
-        Document doc = Document.parse(verifiableCredential.toJson());
-        doc.append("_id", objectId);
-        mongoTemplate.save(doc, sdCollectionName);
+    public void storeVC(VerifiableCredential verifiableCredential, SDDocumentDto sdDocumentDto, String id) {
+        var vcModel = VCModel.builder()
+                .id(id)
+                .bpn(sdDocumentDto.getBpn())
+                .companyNumber(sdDocumentDto.getCompany_number())
+                .headquarterCountry(sdDocumentDto.getHeadquarter_country())
+                .legalCountry(sdDocumentDto.getLegal_country())
+                .serviceProvider(sdDocumentDto.getService_provider())
+                .sdType(sdDocumentDto.getSd_type())
+                .fullJson(verifiableCredential.toJson())
+                .build();
+        vcRepo.save(vcModel);
     }
 
     /**
@@ -104,6 +113,18 @@ public class SDFactory {
      * @param ids list of VC identities
      */
     public void removeSelfDescriptions(List<String> ids) {
-        mongoTemplate.remove(Query.query(Criteria.where("id").in(ids)), sdCollectionName);
+        vcRepo.deleteAllById(normalizeIds(ids));
+    }
+
+    private List<String> normalizeIds(List<String> ids) {
+        return ids.stream()
+                .map(it -> {
+                    var matcher = UUID_REGEX.matcher(it);
+                    if (matcher.find()) {
+                        return matcher.group(0);
+                    }
+                    return it;
+                })
+                .collect(Collectors.toList());
     }
 }

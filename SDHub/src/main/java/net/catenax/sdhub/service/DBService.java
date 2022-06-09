@@ -4,17 +4,14 @@ import com.danubetech.verifiablecredentials.VerifiableCredential;
 import com.danubetech.verifiablecredentials.VerifiablePresentation;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.bson.Document;
-import org.bson.types.ObjectId;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.mongodb.core.query.Criteria;
-import org.springframework.data.mongodb.core.query.Query;
+import net.catenax.sdhub.repo.VCModel;
+import net.catenax.sdhub.repo.VerifiableCredentialRepo;
 import org.springframework.stereotype.Service;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.util.List;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * A query interface implementation of SD-hub
@@ -23,11 +20,10 @@ import java.util.stream.Stream;
 @Service
 @RequiredArgsConstructor
 public class DBService {
-    private final MongoTemplate mongoTemplate;
+    private final VerifiableCredentialRepo vcRepo;
     private final SDHub sdHub;
 
-    @Value("${app.db.sd.collectionName}")
-    private String sdCollectionName;
+    public static final Pattern UUID_REGEX = Pattern.compile("\\p{XDigit}{8}-\\p{XDigit}{4}-\\p{XDigit}{4}-\\p{XDigit}{4}-\\p{XDigit}{12}");
 
     /**
      * Searches the VerifiableCredentials by the parameter to include them to the VerifiablePresentation
@@ -43,29 +39,12 @@ public class DBService {
                                                       List<String> headquarterCountries, List<String> legalCountries,
                                                       List<String> serviceProviders, List<String> sdTypes,
                                                       List<String> bpns) {
-        var query = new Query();
-        if (listIsNotEmpty(ids)) {
-            query = query.addCriteria(Criteria.where("credentialSubject.id").in(ids));
-        }
-        if (listIsNotEmpty(companyNumbers)) {
-            query = query.addCriteria(Criteria.where("credentialSubject.company_number").in(companyNumbers));
-        }
-        if (listIsNotEmpty(headquarterCountries)) {
-            query = query.addCriteria(Criteria.where("credentialSubject.headquarter_country").in(headquarterCountries));
-        }
-        if (listIsNotEmpty(legalCountries)) {
-            query = query.addCriteria(Criteria.where("credentialSubject.legal_country").in(legalCountries));
-        }
-        if (listIsNotEmpty(serviceProviders)) {
-            query = query.addCriteria(Criteria.where("credentialSubject.service_provider").in(serviceProviders));
-        }
-        if (listIsNotEmpty(legalCountries)) {
-            query = query.addCriteria(Criteria.where("credentialSubject.sd_type").in(sdTypes));
-        }
-        if (listIsNotEmpty(bpns)) {
-            query = query.addCriteria(Criteria.where("credentialSubject.bpn").in(bpns));
-        }
-        return retriveVp(query);
+        ids = normalizeIds(ids);
+        var vcs = vcRepo.findAllByIdInAndCompanyNumberInAndHeadquarterCountryInAndLegalCountryInAndServiceProviderInAndSdTypeInAndBpnIn(
+                ids, companyNumbers, headquarterCountries, legalCountries, serviceProviders, sdTypes, bpns
+        );
+
+        return retriveVp(vcs);
     }
 
     /**
@@ -75,30 +54,32 @@ public class DBService {
      * @return Verifiable Presentation
      */
     public VerifiablePresentation getSelfDescriptions(List<String> ids) {
-        var query = new Query();
-        if (listIsNotEmpty(ids)) {
-            query = query.addCriteria(Criteria.where("_id").in(
-                    ids.stream().map(ObjectId::new).collect(Collectors.toList()))
-            );
-        }
-        return retriveVp(query);
+        var vcs = vcRepo.findAllByIdIn(normalizeIds(ids));
+        return retriveVp(vcs);
     }
 
-    private VerifiablePresentation retriveVp(Query query) {
-        var res = mongoTemplate.find(query, Document.class, sdCollectionName)
+    private List<String> normalizeIds(List<String> ids) {
+        return ids.stream()
+                .map(it -> {
+                    var matcher = UUID_REGEX.matcher(it);
+                    if (matcher.find()) {
+                        return matcher.group(0);
+                    }
+                    return it;
+                })
+                .collect(Collectors.toList());
+    }
+
+    private VerifiablePresentation retriveVp(List<VCModel> vcs) {
+        var res = vcs
                 .stream()
-                .peek(it -> it.remove("_id"))
-                .map(it -> VerifiableCredential.fromJson(it.toJson()))
+                .map(it -> VerifiableCredential.fromJson(it.getFullJson()))
                 .collect(Collectors.toList());
         try {
             return sdHub.createVP(res);
         } catch (Exception e) {
             throw new RuntimeException("Exception during creating VP", e);
         }
-    }
-
-    private boolean listIsNotEmpty(List<?> lst) {
-        return lst != null && !lst.isEmpty();
     }
 
     /**
@@ -108,11 +89,11 @@ public class DBService {
      * @return Verifiable Presentation
      */
     public VerifiableCredential getVc(String id) {
-        return Stream.ofNullable(mongoTemplate.findById(new ObjectId(id), Document.class, sdCollectionName))
-                .peek(document -> document.remove("_id"))
-                .map(Document::toJson)
-                .map(VerifiableCredential::fromJson)
-                .findFirst()
-                .orElse(null);
+        var vcs = vcRepo.findAllByIdIn(normalizeIds(List.of(id)));
+        if (!vcs.isEmpty()) {
+            return VerifiableCredential.fromJson(vcs.get(0).getFullJson());
+        } else {
+            return null;
+        }
     }
 }

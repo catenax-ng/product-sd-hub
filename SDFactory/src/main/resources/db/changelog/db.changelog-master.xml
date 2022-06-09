@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.9.xsd">
+
+    <changeSet id="202206061010" author="Daniil Pankratov">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="verifiable_credential"/>
+        </preConditions>
+        <createTable tableName="verifiable_credential">
+            <column name="id" type="varchar(250)">
+                <constraints primaryKey="true" primaryKeyName="vc_id_pk"/>
+            </column>
+
+            <column name="company_number" type="varchar(250)"/>
+            <column name="headquarter_country" type="varchar(250)"/>
+            <column name="legal_country" type="varchar(250)"/>
+            <column name="service_provider" type="varchar(250)"/>
+            <column name="sd_type" type="varchar(250)"/>
+            <column name="bpn" type="varchar(250)"/>
+
+            <column name="full_json" type="text"/>
+
+        </createTable>
+    </changeSet>
+
+</databaseChangeLog>

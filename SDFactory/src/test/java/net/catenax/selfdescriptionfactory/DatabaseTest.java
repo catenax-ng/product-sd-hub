@@ -2,8 +2,9 @@ package net.catenax.selfdescriptionfactory;
 
 import com.danubetech.verifiablecredentials.VerifiableCredential;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.mongodb.DBObject;
+import io.zonky.test.db.AutoConfigureEmbeddedDatabase;
 import net.catenax.selfdescriptionfactory.dto.SDDocumentDto;
+import net.catenax.selfdescriptionfactory.repo.VerifiableCredentialRepo;
 import net.catenax.selfdescriptionfactory.service.SDFactory;
 import org.junit.Assert;
 import org.junit.Test;
@@ -12,7 +13,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.annotation.DirtiesContext;
@@ -26,9 +26,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @RunWith(SpringRunner.class)
 @DirtiesContext
+@AutoConfigureEmbeddedDatabase(
+        type = AutoConfigureEmbeddedDatabase.DatabaseType.POSTGRES,
+        provider = AutoConfigureEmbeddedDatabase.DatabaseProvider.ZONKY
+)
 public class DatabaseTest {
     @Autowired
-    MongoTemplate mongoTemplate;
+    VerifiableCredentialRepo vcRepo;
 
     @Autowired
     MockMvc mockMvc;
@@ -39,8 +43,6 @@ public class DatabaseTest {
     @Autowired
     ObjectMapper objectMapper;
 
-    @Value("${app.db.sd.collectionName}")
-    String sdCollectionName;
     @Value("${app.verifiableCredentials.holder}")
     String holder;
     @Value("${app.verifiableCredentials.issuer}")
@@ -64,9 +66,8 @@ public class DatabaseTest {
         var respStr = vcResp.getContentAsString();
         Assert.assertNotNull(respStr);
         var resVC = VerifiableCredential.fromJson(respStr);
-        var dbJson = mongoTemplate.findAll(DBObject.class, sdCollectionName).iterator().next();
-        dbJson.removeField("_id");
-        var dbVc = VerifiableCredential.fromJson(dbJson.toString());
+        var vcModel = vcRepo.findAll().get(0);
+        var dbVc = VerifiableCredential.fromJson(vcModel.getFullJson());
         Assert.assertEquals(resVC, dbVc);
     }
 
