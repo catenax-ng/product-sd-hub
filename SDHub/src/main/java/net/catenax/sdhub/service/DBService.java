@@ -7,7 +7,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.catenax.sdhub.repo.DBVCEntity;
-import net.catenax.sdhub.repo.DBVCRepository;
 import net.catenax.sdhub.repo.VCModel;
 import org.springframework.stereotype.Service;
 
@@ -102,7 +101,7 @@ public class DBService {
         if (!vcs.isEmpty()) {
             var jsn = "";
             try {
-                jsn= objectMapper.writeValueAsString(vcs.get(0));
+                jsn = objectMapper.writeValueAsString(vcs.get(0));
             } catch (JsonProcessingException e) {
                 return null;
             }

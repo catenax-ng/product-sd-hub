@@ -1,0 +1,20 @@
+version: "3.9"
+services:
+  mongodb-sdhub:
+    image: mongo
+    restart: always
+  sd-hub:
+    image: catenax/sdhub:1.0.0
+    ports:
+      - "8080:8080"
+    secrets:
+      - custodian
+  sd-factory:
+    image: catenax/sdfactory:1.0.0
+    ports:
+      - "8081:8080"
+    secrets:
+      - custodian
+secrets:
+  custodian:
+    file: test-secret.txt
