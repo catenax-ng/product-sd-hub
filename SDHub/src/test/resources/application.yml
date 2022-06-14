@@ -3,6 +3,10 @@ spring:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
       ddl-auto: create
+    properties:
+      hibernate:
+        show_sql: true
+        format_sql: true
   datasource:
     url: jdbc:postgresql://localhost:5432/postgres
     username: postgres
@@ -24,3 +28,8 @@ app:
     clientSecret: Htv9MhV2rk6XM9zV54xdo2cwSMxFIBzU
     username: custodian@catenax.de
     password: changeme
+logging:
+  level:
+    org:
+      hibernate:
+        type: trace

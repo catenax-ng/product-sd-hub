@@ -7,8 +7,10 @@ import com.danubetech.verifiablecredentials.jsonld.VerifiableCredentialContexts;
 import foundation.identity.jsonld.JsonLDUtils;
 import lombok.RequiredArgsConstructor;
 import net.catenax.selfdescriptionfactory.dto.SDDocumentDto;
+import net.catenax.selfdescriptionfactory.repo.DBVCEntity;
+import net.catenax.selfdescriptionfactory.repo.DBVCRepository;
+import net.catenax.selfdescriptionfactory.repo.RepoCredentialSubject;
 import net.catenax.selfdescriptionfactory.repo.VCModel;
-import net.catenax.selfdescriptionfactory.repo.VerifiableCredentialRepo;
 import net.catenax.selfdescriptionfactory.service.wallet.CustodianWallet;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.config.ConfigurableBeanFactory;
@@ -23,6 +25,7 @@ import java.time.Instant;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -58,7 +61,8 @@ public class SDFactory {
     @Value("${app.verifiableCredentials.idPrefix}")
     private String idPrefix;
 
-    private final VerifiableCredentialRepo vcRepo;
+    private final DBVCRepository vcRepo;
+    private final DBVCRepoService repoService;
     private final CustodianWallet custodianWallet;
 
     /**
@@ -67,18 +71,25 @@ public class SDFactory {
      * @param verifiableCredential credential to be saved
      * @param sdDocumentDto
      */
-    public void storeVC(VerifiableCredential verifiableCredential, SDDocumentDto sdDocumentDto, String id) {
-        var vcModel = VCModel.builder()
-                .id(id)
+    public void storeVC(VerifiableCredential verifiableCredential, SDDocumentDto sdDocumentDto, UUID id) {
+        var vcCredentialSubject = verifiableCredential.getCredentialSubject();
+        var credentialSubject = RepoCredentialSubject.builder()
+                .id(vcCredentialSubject.getId().toString())
                 .bpn(sdDocumentDto.getBpn())
                 .companyNumber(sdDocumentDto.getCompany_number())
                 .headquarterCountry(sdDocumentDto.getHeadquarter_country())
                 .legalCountry(sdDocumentDto.getLegal_country())
                 .serviceProvider(sdDocumentDto.getService_provider())
                 .sdType(sdDocumentDto.getSd_type())
-                .fullJson(verifiableCredential.toJson())
                 .build();
-        vcRepo.save(vcModel);
+        vcRepo.save(new DBVCEntity(id,
+                VCModel.builder()
+                        .context(verifiableCredential.getContexts().stream().map(URI::toString).collect(Collectors.toList()))
+                        .type(verifiableCredential.getTypes())
+                        .issuer(verifiableCredential.getIssuer().toString())
+                        .issuanceDate(verifiableCredential.getIssuanceDate())
+                        .credentialSubject(credentialSubject)
+                        .build()));
     }
 
     /**
@@ -113,7 +124,7 @@ public class SDFactory {
      * @param ids list of VC identities
      */
     public void removeSelfDescriptions(List<String> ids) {
-        vcRepo.deleteAllById(normalizeIds(ids));
+        repoService.deleteByIds(normalizeIds(ids));
     }
 
     private List<String> normalizeIds(List<String> ids) {

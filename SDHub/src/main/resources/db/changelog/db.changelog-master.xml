@@ -10,19 +10,11 @@
             <tableExists tableName="verifiable_credential"/>
         </preConditions>
         <createTable tableName="verifiable_credential">
-            <column name="id" type="varchar(250)">
+            <column name="id" type="uuid" defaultValue="uuid_generate_v4()">
                 <constraints primaryKey="true" primaryKeyName="vc_id_pk"/>
             </column>
 
-            <column name="company_number" type="varchar(250)"/>
-            <column name="headquarter_country" type="varchar(250)"/>
-            <column name="legal_country" type="varchar(250)"/>
-            <column name="service_provider" type="varchar(250)"/>
-            <column name="sd_type" type="varchar(250)"/>
-            <column name="bpn" type="varchar(250)"/>
-
-            <column name="full_json" type="text"/>
-
+            <column name="vc" type="jsonb"/>
         </createTable>
     </changeSet>
 

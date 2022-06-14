@@ -4,7 +4,7 @@ import com.danubetech.verifiablecredentials.VerifiableCredential;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.zonky.test.db.AutoConfigureEmbeddedDatabase;
 import net.catenax.selfdescriptionfactory.dto.SDDocumentDto;
-import net.catenax.selfdescriptionfactory.repo.VerifiableCredentialRepo;
+import net.catenax.selfdescriptionfactory.repo.DBVCRepository;
 import net.catenax.selfdescriptionfactory.service.SDFactory;
 import org.junit.Assert;
 import org.junit.Test;
@@ -32,7 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 )
 public class DatabaseTest {
     @Autowired
-    VerifiableCredentialRepo vcRepo;
+    DBVCRepository vcRepo;
 
     @Autowired
     MockMvc mockMvc;
@@ -66,9 +66,9 @@ public class DatabaseTest {
         var respStr = vcResp.getContentAsString();
         Assert.assertNotNull(respStr);
         var resVC = VerifiableCredential.fromJson(respStr);
-        var vcModel = vcRepo.findAll().get(0);
-        var dbVc = VerifiableCredential.fromJson(vcModel.getFullJson());
-        Assert.assertEquals(resVC, dbVc);
-    }
 
+        var vcModel = vcRepo.findAll().get(0);
+        var dbVc = VerifiableCredential.fromJson(objectMapper.writeValueAsString(vcModel.getVc()));
+        Assert.assertEquals(resVC.getCredentialSubject(), dbVc.getCredentialSubject());
+    }
 }

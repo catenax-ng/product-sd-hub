@@ -2,14 +2,17 @@ package net.catenax.sdhub.service;
 
 import com.danubetech.verifiablecredentials.VerifiableCredential;
 import com.danubetech.verifiablecredentials.VerifiablePresentation;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.catenax.sdhub.repo.DBVCEntity;
+import net.catenax.sdhub.repo.DBVCRepository;
 import net.catenax.sdhub.repo.VCModel;
-import net.catenax.sdhub.repo.VerifiableCredentialRepo;
 import org.springframework.stereotype.Service;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -20,8 +23,9 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class DBService {
-    private final VerifiableCredentialRepo vcRepo;
+    private final DBVCRepoService vcRepoService;
     private final SDHub sdHub;
+    private final ObjectMapper objectMapper;
 
     public static final Pattern UUID_REGEX = Pattern.compile("\\p{XDigit}{8}-\\p{XDigit}{4}-\\p{XDigit}{4}-\\p{XDigit}{4}-\\p{XDigit}{12}");
 
@@ -40,9 +44,12 @@ public class DBService {
                                                       List<String> serviceProviders, List<String> sdTypes,
                                                       List<String> bpns) {
         ids = normalizeIds(ids);
-        var vcs = vcRepo.findAllByIdInAndCompanyNumberInAndHeadquarterCountryInAndLegalCountryInAndServiceProviderInAndSdTypeInAndBpnIn(
-                ids, companyNumbers, headquarterCountries, legalCountries, serviceProviders, sdTypes, bpns
-        );
+        var vcs = vcRepoService.findByParams(
+                        ids, companyNumbers, headquarterCountries, legalCountries, serviceProviders, sdTypes, bpns
+                )
+                .stream()
+                .map(DBVCEntity::getVc)
+                .toList();
 
         return retriveVp(vcs);
     }
@@ -54,26 +61,25 @@ public class DBService {
      * @return Verifiable Presentation
      */
     public VerifiablePresentation getSelfDescriptions(List<String> ids) {
-        var vcs = vcRepo.findAllByIdIn(normalizeIds(ids));
+        var vcs = vcRepoService.findByIdIn(normalizeIds(ids))
+                .stream()
+                .map(DBVCEntity::getVc)
+                .toList();
         return retriveVp(vcs);
-    }
-
-    private List<String> normalizeIds(List<String> ids) {
-        return ids.stream()
-                .map(it -> {
-                    var matcher = UUID_REGEX.matcher(it);
-                    if (matcher.find()) {
-                        return matcher.group(0);
-                    }
-                    return it;
-                })
-                .collect(Collectors.toList());
     }
 
     private VerifiablePresentation retriveVp(List<VCModel> vcs) {
         var res = vcs
                 .stream()
-                .map(it -> VerifiableCredential.fromJson(it.getFullJson()))
+                .map(it -> {
+                    try {
+                        return objectMapper.writeValueAsString(it);
+                    } catch (JsonProcessingException e) {
+                        return null;
+                    }
+                })
+                .filter(Objects::nonNull)
+                .map(VerifiableCredential::fromJson)
                 .collect(Collectors.toList());
         try {
             return sdHub.createVP(res);
@@ -89,11 +95,32 @@ public class DBService {
      * @return Verifiable Presentation
      */
     public VerifiableCredential getVc(String id) {
-        var vcs = vcRepo.findAllByIdIn(normalizeIds(List.of(id)));
+        var vcs = vcRepoService.findByIdIn(normalizeIds(List.of(id)))
+                .stream()
+                .map(DBVCEntity::getVc)
+                .toList();
         if (!vcs.isEmpty()) {
-            return VerifiableCredential.fromJson(vcs.get(0).getFullJson());
+            var jsn = "";
+            try {
+                jsn= objectMapper.writeValueAsString(vcs.get(0));
+            } catch (JsonProcessingException e) {
+                return null;
+            }
+            return VerifiableCredential.fromJson(jsn);
         } else {
             return null;
         }
+    }
+
+    private List<String> normalizeIds(List<String> ids) {
+        return ids.stream()
+                .map(it -> {
+                    var matcher = UUID_REGEX.matcher(it);
+                    if (matcher.find()) {
+                        return matcher.group(0);
+                    }
+                    return it;
+                })
+                .collect(Collectors.toList());
     }
 }

@@ -1,43 +1,36 @@
 package net.catenax.selfdescriptionfactory.repo;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Type;
 
 import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.Id;
-import javax.persistence.Table;
+import java.util.Date;
+import java.util.List;
 
 @Data
+@Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Entity
-@Builder
-@Table(name = "verifiable_credential")
 public class VCModel {
-    @Id
-    private String id;
+    @Column(name = "context")
+    @JsonProperty("@context")
+    private List<String> context;
 
-    @Column(name = "company_number")
-    private String companyNumber;
+    @Column(name = "type")
+    private List<String> type;
 
-    @Column(name = "headquarter_country")
-    private String headquarterCountry;
+    @Column(name = "issuer")
+    private String issuer;
 
-    @Column(name = "legal_country")
-    private String legalCountry;
+    @Column(name = "issuanceDate")
+    private Date issuanceDate;
 
-    @Column(name = "service_provider")
-    private String serviceProvider;
-
-    @Column(name = "sd_type")
-    private String sdType;
-
-    @Column(name = "bpn")
-    private String bpn;
-
-    @Column(name = "full_json", length = 100_000)
-    private String fullJson;
+    @Type(type = "jsonb")
+    @Column(columnDefinition = "jsonb", name = "credential_subject")
+    @JsonProperty("credentialSubject")
+    private RepoCredentialSubject credentialSubject;
 }

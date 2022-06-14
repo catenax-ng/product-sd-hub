@@ -83,8 +83,8 @@ public class SDFactoryEndpoints {
         sdMap.remove("issuer");
         sdMap.remove("holder");
         sdMap.values().removeAll(Collections.singleton(null));
-        var id = UUID.randomUUID().toString();
-        var verifiedCredentials = sdFactory.createVC(id, sdMap,
+        var id = UUID.randomUUID();
+        var verifiedCredentials = sdFactory.createVC(id.toString(), sdMap,
                 sdDocumentDto.getHolder(), sdDocumentDto.getIssuer());
         sdFactory.storeVC(verifiedCredentials, sdDocumentDto, id);
         return verifiedCredentials;
