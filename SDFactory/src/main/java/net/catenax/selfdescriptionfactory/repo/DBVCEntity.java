@@ -1,6 +1,7 @@
 package net.catenax.selfdescriptionfactory.repo;
 
 import com.vladmihalcea.hibernate.type.json.JsonBinaryType;
+import com.vladmihalcea.hibernate.type.json.JsonNodeBinaryType;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -25,5 +26,5 @@ public class DBVCEntity {
 
     @Type(type = "jsonb")
     @Column(columnDefinition = "jsonb")
-    private VCModel vc;
+    private String vc;
 }

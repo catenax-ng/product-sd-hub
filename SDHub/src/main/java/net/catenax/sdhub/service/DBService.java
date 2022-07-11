@@ -7,11 +7,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.catenax.sdhub.repo.DBVCEntity;
-import net.catenax.sdhub.repo.VCModel;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Objects;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -67,17 +65,9 @@ public class DBService {
         return retriveVp(vcs);
     }
 
-    private VerifiablePresentation retriveVp(List<VCModel> vcs) {
+    private VerifiablePresentation retriveVp(List<String> vcs) {
         var res = vcs
                 .stream()
-                .map(it -> {
-                    try {
-                        return objectMapper.writeValueAsString(it);
-                    } catch (JsonProcessingException e) {
-                        return null;
-                    }
-                })
-                .filter(Objects::nonNull)
                 .map(VerifiableCredential::fromJson)
                 .collect(Collectors.toList());
         try {
@@ -89,7 +79,7 @@ public class DBService {
 
     /**
      * Searches the VerifiableCredential by the id
-     * 
+     *
      * @param id VC id
      * @return Verifiable Presentation
      */

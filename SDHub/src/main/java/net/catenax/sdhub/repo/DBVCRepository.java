@@ -12,13 +12,13 @@ import java.util.UUID;
 public interface DBVCRepository extends JpaRepository<DBVCEntity, UUID> {
     @Query(nativeQuery = true, value = """
             select * from verifiable_credential where 
-                (:ids like '' or vc ->'credential_subject'->>'id' in (:ids)) and
-                (:companyNums like '' or vc ->'credential_subject'->>'company_number' in (:companyNums)) and
-                (:headquarterCountries like '' or vc ->'credential_subject'->>'headquarter_country' in (:headquarterCountries)) and
-                (:legalCountries like '' or vc ->'credential_subject'->>'legal_country' in (:legalCountries)) and
-                (:serviceProviders like '' or vc ->'credential_subject'->>'service_provider' in (:serviceProviders)) and
-                (:sdType like '' or vc ->'credential_subject'->>'sd_type' in (:sdType)) and
-                (:bpns like '' or vc ->'credential_subject'->>'bpn' = any(string_to_array(:bpns, ',')))
+                (:ids = '' or vc ->'credential_subject'->>'id' in (:ids)) and
+                (:companyNums = '' or vc ->'credential_subject'->>'company_number' in (:companyNums)) and
+                (:headquarterCountries = '' or vc ->'credential_subject'->>'headquarter_country' in (:headquarterCountries)) and
+                (:legalCountries = '' or vc ->'credential_subject'->>'legal_country' in (:legalCountries)) and
+                (:serviceProviders = '' or vc ->'credential_subject'->>'service_provider' in (:serviceProviders)) and
+                (:sdType = '' or vc ->'credential_subject'->>'sd_type' in (:sdType)) and
+                (:bpns = '' or vc ->'credential_subject'->>'bpn' in (:bpns))
             """)
     List<DBVCEntity> findByParams(
             @Param("ids") String ids,
@@ -30,6 +30,6 @@ public interface DBVCRepository extends JpaRepository<DBVCEntity, UUID> {
             @Param("bpns") String bpns
     );
 
-    @Query(nativeQuery = true, value = "select * from verifiable_credential where :ids like '' or vc ->'credential_subject'->>'id' in (:ids)")
+    @Query(nativeQuery = true, value = "select * from verifiable_credential where :ids = '' or vc ->'credential_subject'->>'id' in (:ids)")
     List<DBVCEntity> findByIdIn(@Param("ids") String ids);
 }

@@ -25,5 +25,5 @@ public class DBVCEntity {
 
     @Type(type = "jsonb")
     @Column(columnDefinition = "jsonb")
-    private VCModel vc;
+    private String vc;
 }

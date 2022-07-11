@@ -4,13 +4,12 @@ import com.apicatalog.jsonld.document.JsonDocument;
 import com.danubetech.verifiablecredentials.CredentialSubject;
 import com.danubetech.verifiablecredentials.VerifiableCredential;
 import com.danubetech.verifiablecredentials.jsonld.VerifiableCredentialContexts;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import foundation.identity.jsonld.JsonLDUtils;
 import lombok.RequiredArgsConstructor;
 import net.catenax.selfdescriptionfactory.dto.SDDocumentDto;
 import net.catenax.selfdescriptionfactory.repo.DBVCEntity;
 import net.catenax.selfdescriptionfactory.repo.DBVCRepository;
-import net.catenax.selfdescriptionfactory.repo.RepoCredentialSubject;
-import net.catenax.selfdescriptionfactory.repo.VCModel;
 import net.catenax.selfdescriptionfactory.service.wallet.CustodianWallet;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.config.ConfigurableBeanFactory;
@@ -64,6 +63,7 @@ public class SDFactory {
     private final DBVCRepository vcRepo;
     private final DBVCRepoService repoService;
     private final CustodianWallet custodianWallet;
+    private final ObjectMapper objectMapper;
 
     /**
      * Stores VerifiableCredential in Mongo DB without checks
@@ -73,23 +73,31 @@ public class SDFactory {
      */
     public void storeVC(VerifiableCredential verifiableCredential, SDDocumentDto sdDocumentDto, UUID id) {
         var vcCredentialSubject = verifiableCredential.getCredentialSubject();
-        var credentialSubject = RepoCredentialSubject.builder()
-                .id(vcCredentialSubject.getId().toString())
-                .bpn(sdDocumentDto.getBpn())
-                .companyNumber(sdDocumentDto.getCompany_number())
-                .headquarterCountry(sdDocumentDto.getHeadquarter_country())
-                .legalCountry(sdDocumentDto.getLegal_country())
-                .serviceProvider(sdDocumentDto.getService_provider())
-                .sdType(sdDocumentDto.getSd_type())
-                .build();
-        vcRepo.save(new DBVCEntity(id,
-                VCModel.builder()
-                        .context(verifiableCredential.getContexts().stream().map(URI::toString).collect(Collectors.toList()))
-                        .type(verifiableCredential.getTypes())
-                        .issuer(verifiableCredential.getIssuer().toString())
-                        .issuanceDate(verifiableCredential.getIssuanceDate())
-                        .credentialSubject(credentialSubject)
-                        .build()));
+
+        var credentialSubject = objectMapper.createObjectNode()
+                .put("id", vcCredentialSubject.getId().toString())
+                .put("company_number", sdDocumentDto.getCompany_number())
+                .put("headquarter_country", sdDocumentDto.getHeadquarter_country())
+                .put("legal_country", sdDocumentDto.getLegal_country())
+                .put("service_provider", sdDocumentDto.getService_provider())
+                .put("sd_type", sdDocumentDto.getSd_type())
+                .put("bpn", sdDocumentDto.getBpn());
+
+        var contexts = objectMapper.createArrayNode();
+        verifiableCredential.getContexts().stream().map(URI::toString).forEach(contexts::add);
+
+        var types = objectMapper.createArrayNode();
+        verifiableCredential.getTypes().forEach(types::add);
+
+        var root = objectMapper.createObjectNode()
+                .put("issuer", verifiableCredential.getIssuer().toString())
+                .put("issuanceDate", verifiableCredential.getIssuanceDate().toInstant().toString());
+
+        root = root.set("@context", contexts);
+        root = root.set("type", types);
+        root = root.set("credentialSubject", credentialSubject);
+
+        vcRepo.save(new DBVCEntity(id, root.toString()));
     }
 
     /**

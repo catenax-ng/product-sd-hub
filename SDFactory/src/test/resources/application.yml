@@ -25,7 +25,7 @@ app:
     issuer: BPNL000000000000
     durationDays: 90
   custodianWallet:
-    uri: https://custodian-dev.germanywestcentral.cloudapp.azure.com/api
+    uri: https://managed-identity-wallets.int.demo.catena-x.net/api
     auth-server-url: https://catenaxdev003akssrv.germanywestcentral.cloudapp.azure.com/iamcentralidp/auth
     realm: CX-Central
     clientId: Client005-CustodianTest

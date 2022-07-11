@@ -1,10 +1,9 @@
 package net.catenax.sdhub.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.zonky.test.db.AutoConfigureEmbeddedDatabase;
-import net.catenax.sdhub.repo.CredentialSubject;
 import net.catenax.sdhub.repo.DBVCEntity;
 import net.catenax.sdhub.repo.DBVCRepository;
-import net.catenax.sdhub.repo.VCModel;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,23 +23,37 @@ import java.util.UUID;
         provider = AutoConfigureEmbeddedDatabase.DatabaseProvider.ZONKY
 )
 public class DBServiceTest {
+    private static final DBVCEntity entity;
+    private static final String credentialSubjectId;
 
-    private static final DBVCEntity entity = new DBVCEntity(UUID.randomUUID(),
-            new VCModel(
-                    List.of("https://www.w3.org/2018/credentials/v1"),
-                    List.of("VerifiableCredential"),
-                    "https://catalog.demo.supplytree.org/api/user/catenax",
-                    new Date(),
-                    new CredentialSubject(
-                            UUID.randomUUID(),
-                            "did:web:www.aa.com",
-                            "DE",
-                            "DE",
-                            "",
-                            "",
-                            "BPNAAAAAA"
-                    )
-            ));
+    static {
+        var objectMapper = new ObjectMapper();
+        credentialSubjectId = UUID.randomUUID().toString();
+        var credentialSubject = objectMapper.createObjectNode()
+                .put("id", credentialSubjectId)
+                .put("company_number", "did:web:www.aa.com")
+                .put("headquarter_country", "DE")
+                .put("legal_country", "DE")
+                .put("service_provider", "")
+                .put("sd_type", "")
+                .put("bpn", "BPNAAAAAA");
+
+        var contexts = objectMapper.createArrayNode();
+        List.of("https://www.w3.org/2018/credentials/v1").forEach(contexts::add);
+
+        var types = objectMapper.createArrayNode();
+        List.of("VerifiableCredential").forEach(types::add);
+
+        var root = objectMapper.createObjectNode()
+                .put("issuer", "https://catalog.demo.supplytree.org/api/user/catenax")
+                .put("issuanceDate", new Date().toInstant().toString());
+
+        root = root.set("@context", contexts);
+        root = root.set("type", types);
+        root = root.set("credentialSubject", credentialSubject);
+
+        entity = new DBVCEntity(UUID.randomUUID(), root.toString());
+    }
 
     @Autowired
     private DBService service;
@@ -56,7 +69,7 @@ public class DBServiceTest {
 
     @Test
     public void getVcTest() {
-        Assertions.assertNotNull(service.getVc(entity.getVc().getCredentialSubject().getId().toString()));
+        Assertions.assertNotNull(service.getVc(credentialSubjectId));
     }
 
 //    @Test
