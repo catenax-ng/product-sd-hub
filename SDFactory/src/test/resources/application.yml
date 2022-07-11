@@ -10,9 +10,9 @@ spring:
   liquibase:
     change-log: classpath:/db/changelog/db.changelog-master.xml
 keycloak:
-  auth-server-url: https://catenaxdev003akssrv.germanywestcentral.cloudapp.azure.com/iamcentralidp/auth
+  auth-server-url: https://centralidp.demo.catena-x.net/auth
   realm: CX-Central
-  resource: Client005-CustodianTest
+  resource: Cl2-CX-Portal
   bearer-only: true
   use-resource-role-mappings: true
   principal-attribute: preferred_username
@@ -26,7 +26,7 @@ app:
     durationDays: 90
   custodianWallet:
     uri: https://managed-identity-wallets.int.demo.catena-x.net/api
-    auth-server-url: https://catenaxdev003akssrv.germanywestcentral.cloudapp.azure.com/iamcentralidp/auth
+    auth-server-url: https://centralidp.demo.catena-x.net/auth
     realm: CX-Central
     clientId: Client005-CustodianTest
     clientSecret: Htv9MhV2rk6XM9zV54xdo2cwSMxFIBzU

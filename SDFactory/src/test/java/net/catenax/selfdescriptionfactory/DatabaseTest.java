@@ -1,7 +1,9 @@
 package net.catenax.selfdescriptionfactory;
 
 import com.danubetech.verifiablecredentials.VerifiableCredential;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.zonky.test.db.AutoConfigureEmbeddedDatabase;
 import net.catenax.selfdescriptionfactory.dto.SDDocumentDto;
 import net.catenax.selfdescriptionfactory.repo.DBVCRepository;
@@ -18,6 +20,8 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.junit4.SpringRunner;
 import org.springframework.test.web.servlet.MockMvc;
+
+import java.util.Map;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -58,6 +62,8 @@ public class DatabaseTest {
                 .headquarter_country("DE")
                 .legal_country("DE")
                 .bpn("BPN123")
+                .service_provider("provider")
+                .sd_type("sd")
                 .build();
 
         var vcResp = mockMvc.perform(post("/selfdescription")
@@ -68,7 +74,11 @@ public class DatabaseTest {
         var resVC = VerifiableCredential.fromJson(respStr);
 
         var vcModel = vcRepo.findAll().get(0);
-        var dbVc = VerifiableCredential.fromJson(objectMapper.writeValueAsString(vcModel.getVc()));
+
+        var vcJson = objectMapper.readTree(vcModel.getVc());
+        vcJson = ((ObjectNode) vcJson).without("credentialSubject.id");
+
+        var dbVc = VerifiableCredential.fromJson(vcJson.toString());
         Assert.assertEquals(resVC.getCredentialSubject(), dbVc.getCredentialSubject());
     }
 }
