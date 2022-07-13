@@ -2,19 +2,15 @@ package net.catenax.sdhub.service;
 
 import com.danubetech.verifiablecredentials.VerifiableCredential;
 import com.danubetech.verifiablecredentials.VerifiablePresentation;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.bson.Document;
-import org.bson.types.ObjectId;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.mongodb.core.query.Criteria;
-import org.springframework.data.mongodb.core.query.Query;
+import net.catenax.sdhub.repo.DBVCEntity;
 import org.springframework.stereotype.Service;
 
-import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -24,11 +20,11 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class DBService {
-    private final MongoTemplate mongoTemplate;
+    private final DBVCRepoService vcRepoService;
     private final SDHub sdHub;
+    private final ObjectMapper objectMapper;
 
-    @Value("${app.db.sd.collectionName}")
-    private String sdCollectionName;
+    public static final Pattern UUID_REGEX = Pattern.compile("\\p{XDigit}{8}-\\p{XDigit}{4}-\\p{XDigit}{4}-\\p{XDigit}{4}-\\p{XDigit}{12}");
 
     /**
      * Searches the VerifiableCredentials by the parameter to include them to the VerifiablePresentation
@@ -44,36 +40,15 @@ public class DBService {
                                                       List<String> headquarterCountries, List<String> legalCountries,
                                                       List<String> serviceProviders, List<String> sdTypes,
                                                       List<String> bpns) {
-        var query = new Query();
-        if (listIsNotEmpty(ids)) {
-            query = query.addCriteria(Criteria.where("credentialSubject.id").in(ids));
-        }
-        if (listIsNotEmpty(companyNumbers)) {
-            query = query.addCriteria(Criteria.where("credentialSubject.company_number").in(companyNumbers));
-        }
-        if (listIsNotEmpty(headquarterCountries)) {
-            query = query.addCriteria(Criteria.where("credentialSubject.headquarter_country").in(headquarterCountries));
-        }
-        if (listIsNotEmpty(legalCountries)) {
-            query = query.addCriteria(Criteria.where("credentialSubject.legal_country").in(legalCountries));
-        }
-        if (listIsNotEmpty(serviceProviders)) {
-            query = query.addCriteria(Criteria.where("credentialSubject.service_provider").in(serviceProviders));
-        }
-        if (listIsNotEmpty(sdTypes)) {
-            query = query.addCriteria(Criteria.where("credentialSubject.sd_type").in(sdTypes));
-        }
-        if (listIsNotEmpty(bpns)) {
-            query = query.addCriteria(Criteria.where("credentialSubject.bpn").in(bpns));
-        }
-        return retriveVp(query);
-    }
-
-    private List<ObjectId> transformId(List<String> ids) {
-        return ids.stream()
-                .filter(ObjectId::isValid)
-                .map(ObjectId::new)
+        ids = normalizeIds(ids);
+        var vcs = vcRepoService.findByParams(
+                        ids, companyNumbers, headquarterCountries, legalCountries, serviceProviders, sdTypes, bpns
+                )
+                .stream()
+                .map(DBVCEntity::getVc)
                 .toList();
+
+        return retriveVp(vcs);
     }
 
     /**
@@ -83,19 +58,17 @@ public class DBService {
      * @return Verifiable Presentation
      */
     public VerifiablePresentation getSelfDescriptions(List<String> ids) {
-        var query = new Query();
-        if (listIsNotEmpty(ids)) {
-            var oids = transformId(ids);
-            query = query.addCriteria(Criteria.where("_id").in(oids));
-        }
-        return retriveVp(query);
+        var vcs = vcRepoService.findByIdIn(normalizeIds(ids))
+                .stream()
+                .map(DBVCEntity::getVc)
+                .toList();
+        return retriveVp(vcs);
     }
 
-    private VerifiablePresentation retriveVp(Query query) {
-        var res = mongoTemplate.find(query, Document.class, sdCollectionName)
+    private VerifiablePresentation retriveVp(List<String> vcs) {
+        var res = vcs
                 .stream()
-                .peek(it -> it.remove("_id"))
-                .map(it -> VerifiableCredential.fromJson(it.toJson()))
+                .map(VerifiableCredential::fromJson)
                 .collect(Collectors.toList());
         try {
             return sdHub.createVP(res);
@@ -104,24 +77,39 @@ public class DBService {
         }
     }
 
-    private boolean listIsNotEmpty(List<?> lst) {
-        return lst != null && !lst.isEmpty();
-    }
-
     /**
      * Searches the VerifiableCredential by the id
-     * 
+     *
      * @param id VC id
      * @return Verifiable Presentation
      */
     public VerifiableCredential getVc(String id) {
-        return transformId(Collections.singletonList(id)).stream()
-                .map(oid ->mongoTemplate.findById(oid, Document.class, sdCollectionName))
-                .filter(Objects::nonNull)
-                .peek(document -> document.remove("_id"))
-                .map(Document::toJson)
-                .map(VerifiableCredential::fromJson)
-                .findFirst()
-                .orElse(null);
+        var vcs = vcRepoService.findByIdIn(normalizeIds(List.of(id)))
+                .stream()
+                .map(DBVCEntity::getVc)
+                .toList();
+        if (!vcs.isEmpty()) {
+            var jsn = "";
+            try {
+                jsn = objectMapper.writeValueAsString(vcs.get(0));
+            } catch (JsonProcessingException e) {
+                return null;
+            }
+            return VerifiableCredential.fromJson(jsn);
+        } else {
+            return null;
+        }
+    }
+
+    private List<String> normalizeIds(List<String> ids) {
+        return ids.stream()
+                .map(it -> {
+                    var matcher = UUID_REGEX.matcher(it);
+                    if (matcher.find()) {
+                        return matcher.group(0);
+                    }
+                    return it;
+                })
+                .collect(Collectors.toList());
     }
 }

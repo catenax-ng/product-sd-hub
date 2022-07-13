@@ -4,17 +4,16 @@ import com.apicatalog.jsonld.document.JsonDocument;
 import com.danubetech.verifiablecredentials.CredentialSubject;
 import com.danubetech.verifiablecredentials.VerifiableCredential;
 import com.danubetech.verifiablecredentials.jsonld.VerifiableCredentialContexts;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import foundation.identity.jsonld.JsonLDUtils;
 import lombok.RequiredArgsConstructor;
+import net.catenax.selfdescriptionfactory.dto.SDDocumentDto;
+import net.catenax.selfdescriptionfactory.repo.DBVCEntity;
+import net.catenax.selfdescriptionfactory.repo.DBVCRepository;
 import net.catenax.selfdescriptionfactory.service.wallet.CustodianWallet;
-import org.bson.Document;
-import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.config.ConfigurableBeanFactory;
 import org.springframework.context.annotation.Scope;
-import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.mongodb.core.query.Criteria;
-import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -25,6 +24,9 @@ import java.time.Instant;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * A service to create and manipulate of Self-Description document
@@ -39,6 +41,8 @@ public class SDFactory {
     // Namespace for the Traceability context, used for the test in conjunction with https://catalog.demo.supplytree.org project
     static final URI TRACEABILITY_VOC_URI = URI.create("https://w3id.org/traceability/v1");
 
+    public static final Pattern UUID_REGEX = Pattern.compile("\\p{XDigit}{8}-\\p{XDigit}{4}-\\p{XDigit}{4}-\\p{XDigit}{4}-\\p{XDigit}{12}");
+
     static {
         try (InputStream sdVocIs = SDFactory.class.getClassLoader().getResourceAsStream("verifiablecredentials.jsonld/sd-document-v0.1.jsonld");
              InputStream trVocIs = SDFactory.class.getClassLoader().getResourceAsStream("verifiablecredentials.jsonld/traceability-v1.jsonld")) {
@@ -51,25 +55,49 @@ public class SDFactory {
         }
     }
 
-    @Value("${app.db.sd.collectionName}")
-    private String sdCollectionName;
     @Value("${app.verifiableCredentials.durationDays:90}")
     private int duration;
     @Value("${app.verifiableCredentials.idPrefix}")
     private String idPrefix;
 
-    private final MongoTemplate mongoTemplate;
+    private final DBVCRepository vcRepo;
+    private final DBVCRepoService repoService;
     private final CustodianWallet custodianWallet;
+    private final ObjectMapper objectMapper;
 
     /**
      * Stores VerifiableCredential in Mongo DB without checks
      *
      * @param verifiableCredential credential to be saved
+     * @param sdDocumentDto
      */
-    public void storeVC(VerifiableCredential verifiableCredential, ObjectId objectId) {
-        Document doc = Document.parse(verifiableCredential.toJson());
-        doc.append("_id", objectId);
-        mongoTemplate.save(doc, sdCollectionName);
+    public void storeVC(VerifiableCredential verifiableCredential, SDDocumentDto sdDocumentDto, UUID id) {
+        var vcCredentialSubject = verifiableCredential.getCredentialSubject();
+
+        var credentialSubject = objectMapper.createObjectNode()
+                .put("id", vcCredentialSubject.getId().toString())
+                .put("company_number", sdDocumentDto.getCompany_number())
+                .put("headquarter_country", sdDocumentDto.getHeadquarter_country())
+                .put("legal_country", sdDocumentDto.getLegal_country())
+                .put("service_provider", sdDocumentDto.getService_provider())
+                .put("sd_type", sdDocumentDto.getSd_type())
+                .put("bpn", sdDocumentDto.getBpn());
+
+        var contexts = objectMapper.createArrayNode();
+        verifiableCredential.getContexts().stream().map(URI::toString).forEach(contexts::add);
+
+        var types = objectMapper.createArrayNode();
+        verifiableCredential.getTypes().forEach(types::add);
+
+        var root = objectMapper.createObjectNode()
+                .put("issuer", verifiableCredential.getIssuer().toString())
+                .put("issuanceDate", verifiableCredential.getIssuanceDate().toInstant().toString());
+
+        root = root.set("@context", contexts);
+        root = root.set("type", types);
+        root = root.set("credentialSubject", credentialSubject);
+
+        vcRepo.save(new DBVCEntity(id, root.toString()));
     }
 
     /**
@@ -99,19 +127,23 @@ public class SDFactory {
         return custodianWallet.getSignedVC(verifiableCredential);
     }
 
-    private List<ObjectId> transformId(List<String> ids) {
-        return ids.stream()
-                .filter(ObjectId::isValid)
-                .map(ObjectId::new)
-                .toList();
-    }
-
     /***
      * Deletes Verifiable Credentials from DB
      * @param ids list of VC identities
      */
     public void removeSelfDescriptions(List<String> ids) {
-        var oidsToRevove = transformId(ids);
-        mongoTemplate.remove(Query.query(Criteria.where("_id").in(oidsToRevove, sdCollectionName)));
+        repoService.deleteByIds(normalizeIds(ids));
+    }
+
+    private List<String> normalizeIds(List<String> ids) {
+        return ids.stream()
+                .map(it -> {
+                    var matcher = UUID_REGEX.matcher(it);
+                    if (matcher.find()) {
+                        return matcher.group(0);
+                    }
+                    return it;
+                })
+                .collect(Collectors.toList());
     }
 }
